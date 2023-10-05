@@ -1,22 +1,99 @@
----
-title: "Trends in usage of fitness trackers"
-output:
-  html_document:
-    toc: true
-    toc_depth: 2
-    number_sections: true
-toc-title: "Table of Contents"
----
+<div style="text-align:center;">
+# <span style="color:#20B2AA"> Trends in Fitness Tracker Usage </span>
+</div>
 
-# Summary
+<!-- Creating a style to control the table of contents -->
+<style>
+.toc-item {
+    font-size: 16px; /* Adjust the font size as needed */
+    display: block; /* Forces each item onto a new line */
+}
+</style>
 
-# Motivation
+## Table of Contents
 
-# Data Preparation
+- <span class="toc-item">[Summary of Project](#section-1)</span>
+- <span class="toc-item">[Ask](#section-2)</span>
+- <span class="toc-item">[Data Preparation](#section-3)</span>
+- <span class="toc-item">[Data Processing](#section-4)</span>
+- <span class="toc-item">[Data Analysis](#section-5)</span>
+- <span class="toc-item">[Share](#section-6)</span>
+- <span class="toc-item">[Conclusions](#section-7)</span>
+- <span class="toc-item">[Suggested Actions](#section-8)</span>
 
-# Processing 
 
-# Analysis
+## Summary of Project {#section-1}
 
-# Conclusion
+Mention the summary/abstract of the data analysis project
 
+-------------------------------------------
+
+## Ask {#section-2}
+
+This project aims to understand and identify the usage trends in existing customers of 
+non-Bellabeat fitness devices. The trends identified from this study will be applied to existing Bellabeat customers and theor marketing strategy
+
+#### Primary Stakeholders:
+
+- Urška Sršen - Co-founder of Bellabeat and Chief Creative Officer 
+- Sando Mur - Mathematician and Co-founder; Also member of the Bellabeat executive team
+- Bellabeat Marketing and Analytics team 
+
+-------------------------------------------
+
+## Data Preparation {#section-3}
+
+### Dataset: *FitBit Fitness Tracker Data*
+
+This case study uses the FitBit Fitness Tracker Data stored in Kaggle at the location [(https://www.kaggle.com/datasets/arashnic/fitbit)](https://www.kaggle.com/datasets/arashnic/fitbit). The dataset is hosted by Mobius [(Kaggle profile)](https://www.kaggle.com/arashnic)
+
+Guiding questions
+
+- Where is your data stored?
+- How is the data organized? Is it in long or wide format?
+- Are there issues with bias or credibility in this data? Does your data ROCCC?
+- How are you addressing licensing, privacy, security, and accessibility?
+- How did you verify the data’s integrity?
+- How does it help you answer your question?
+- Are there any problems with the data?
+
+-------------------------------------------
+
+## Data Processing {#section-4}
+
+```{r, results='hide'}
+library(ggpubr)
+library(tidyverse)
+library(here)
+library(skimr)
+library(janitor)
+library(lubridate)
+library(ggrepel)
+library(conflicted)
+```
+
+-------------------------------------------
+
+## Data Analysis {#section-5}
+
+This is the content of Section 5.
+
+-------------------------------------------
+
+## Share {#section-6}
+
+This is the content of Section 6.
+
+-------------------------------------------
+
+## Conclusions {#section-7}
+
+This is the content of Section 7.
+
+-------------------------------------------
+
+## Suggested Actions {#section-8}
+
+This is the content of Section 8.
+
+-------------------------------------------

@@ -11,7 +11,7 @@
 
 
 
-<title>Trends in usage of fitness trackers</title>
+<title>FitnessTracker_EDA_v1.knit</title>
 
 <script>// Pandoc 2.9 adds attributes on both header and div. We remove the former (to
 // be compatible with the behavior of Pandoc < 2.8).
@@ -348,39 +348,132 @@ display: none;
 
 
 
-<h1 class="title toc-ignore">Trends in usage of fitness trackers</h1>
 
 </div>
 
-<div id="TOC">
-<h2 id="toc-title">Table of Contents</h2>
+
+<div id="trends-in-fitness-tracker-usage" class="section level1" style="text-align:center;">
+<h1><span style="color:#20B2AA"> Trends in Fitness Tracker Usage
+</span></h1>
+</div>
+<!-- Creating a style to control the table of contents -->
+<style>
+.toc-item {
+font-size: 16px; 
+display: block; 
+}
+</style>
+<div id="table-of-contents" class="section level2">
+<h2>Table of Contents</h2>
 <ul>
-<li><a href="#summary" id="toc-summary"><span class="toc-section-number">1</span> Summary</a></li>
-<li><a href="#motivation" id="toc-motivation"><span class="toc-section-number">2</span> Motivation</a></li>
-<li><a href="#data-preparation" id="toc-data-preparation"><span class="toc-section-number">3</span> Data Preparation</a></li>
-<li><a href="#processing" id="toc-processing"><span class="toc-section-number">4</span> Processing</a></li>
-<li><a href="#analysis" id="toc-analysis"><span class="toc-section-number">5</span> Analysis</a></li>
-<li><a href="#conclusion" id="toc-conclusion"><span class="toc-section-number">6</span> Conclusion</a></li>
+<li><span class="toc-item"><a href="#section-1">Summary of
+Project</a></span></li>
+<li><span class="toc-item"><a href="#section-2">Ask</a></span></li>
+<li><span class="toc-item"><a href="#section-3">Data
+Preparation</a></span></li>
+<li><span class="toc-item"><a href="#section-4">Data
+Processing</a></span></li>
+<li><span class="toc-item"><a href="#section-5">Data
+Analysis</a></span></li>
+<li><span class="toc-item"><a href="#section-6">Share</a></span></li>
+<li><span class="toc-item"><a href="#section-7">Conclusions</a></span></li>
+<li><span class="toc-item"><a href="#section-8">Suggested
+Actions</a></span></li>
 </ul>
 </div>
-
-<div id="summary" class="section level1" number="1">
-<h1><span class="header-section-number">1</span> Summary</h1>
+<div id="section-1" class="section level2">
+<h2>Summary of Project</h2>
+<p>Mention the summary/abstract of the data analysis project</p>
+<hr />
 </div>
-<div id="motivation" class="section level1" number="2">
-<h1><span class="header-section-number">2</span> Motivation</h1>
+<div id="section-2" class="section level2">
+<h2>Ask</h2>
+<p>This project aims to understand and identify the usage trends in
+existing customers of non-Bellabeat fitness devices. The trends
+identified from this study will be applied to existing Bellabeat
+customers and theor marketing strategy</p>
+<div id="primary-stakeholders" class="section level4">
+<h4>Primary Stakeholders:</h4>
+<ul>
+<li>Urška Sršen - Co-founder of Bellabeat and Chief Creative
+Officer</li>
+<li>Sando Mur - Mathematician and Co-founder; Also member of the
+Bellabeat executive team</li>
+<li>Bellabeat Marketing and Analytics team</li>
+</ul>
+<hr />
 </div>
-<div id="data-preparation" class="section level1" number="3">
-<h1><span class="header-section-number">3</span> Data Preparation</h1>
 </div>
-<div id="processing" class="section level1" number="4">
-<h1><span class="header-section-number">4</span> Processing</h1>
+<div id="section-3" class="section level2">
+<h2>Data Preparation</h2>
+<div id="dataset-fitbit-fitness-tracker-data" class="section level3">
+<h3>Dataset: <em>FitBit Fitness Tracker Data</em></h3>
+<p>This case study uses the FitBit Fitness Tracker Data stored in Kaggle
+at the location <a href="https://www.kaggle.com/datasets/arashnic/fitbit">(https://www.kaggle.com/datasets/arashnic/fitbit)</a>.
+The dataset is hosted by Mobius <a href="https://www.kaggle.com/arashnic">(Kaggle profile)</a></p>
+<p>Guiding questions</p>
+<ul>
+<li>Where is your data stored?</li>
+<li>How is the data organized? Is it in long or wide format?</li>
+<li>Are there issues with bias or credibility in this data? Does your
+data ROCCC?</li>
+<li>How are you addressing licensing, privacy, security, and
+accessibility?</li>
+<li>How did you verify the data’s integrity?</li>
+<li>How does it help you answer your question?</li>
+<li>Are there any problems with the data?</li>
+</ul>
+<hr />
 </div>
-<div id="analysis" class="section level1" number="5">
-<h1><span class="header-section-number">5</span> Analysis</h1>
 </div>
-<div id="conclusion" class="section level1" number="6">
-<h1><span class="header-section-number">6</span> Conclusion</h1>
+<div id="section-4" class="section level2">
+<h2>Data Processing</h2>
+<pre class="r"><code>library(ggpubr)</code></pre>
+<pre><code>## Loading required package: ggplot2</code></pre>
+<pre class="r"><code>library(tidyverse)</code></pre>
+<pre><code>## ── Attaching core tidyverse packages ──────────────────────── tidyverse 2.0.0 ──
+## ✔ dplyr     1.1.3     ✔ readr     2.1.4
+## ✔ forcats   1.0.0     ✔ stringr   1.5.0
+## ✔ lubridate 1.9.3     ✔ tibble    3.2.1
+## ✔ purrr     1.0.2     ✔ tidyr     1.3.0</code></pre>
+<pre><code>## ── Conflicts ────────────────────────────────────────── tidyverse_conflicts() ──
+## ✖ dplyr::filter() masks stats::filter()
+## ✖ dplyr::lag()    masks stats::lag()
+## ℹ Use the conflicted package (&lt;http://conflicted.r-lib.org/&gt;) to force all conflicts to become errors</code></pre>
+<pre class="r"><code>library(here)</code></pre>
+<pre><code>## here() starts at /Users/arkayan/DataScience/R/Trends-In-Fitness-Trackers</code></pre>
+<pre class="r"><code>library(skimr)
+library(janitor)</code></pre>
+<pre><code>## 
+## Attaching package: &#39;janitor&#39;
+## 
+## The following objects are masked from &#39;package:stats&#39;:
+## 
+##     chisq.test, fisher.test</code></pre>
+<pre class="r"><code>library(lubridate)
+library(ggrepel)
+library(conflicted)</code></pre>
+<hr />
+</div>
+<div id="section-5" class="section level2">
+<h2>Data Analysis</h2>
+<p>This is the content of Section 5.</p>
+<hr />
+</div>
+<div id="section-6" class="section level2">
+<h2>Share</h2>
+<p>This is the content of Section 6.</p>
+<hr />
+</div>
+<div id="section-7" class="section level2">
+<h2>Conclusions</h2>
+<p>This is the content of Section 7.</p>
+<hr />
+</div>
+<div id="section-8" class="section level2">
+<h2>Suggested Actions</h2>
+<p>This is the content of Section 8.</p>
+<hr />
 </div>
 
 
