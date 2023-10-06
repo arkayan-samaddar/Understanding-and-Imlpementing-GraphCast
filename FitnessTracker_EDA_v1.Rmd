@@ -28,12 +28,12 @@ Mention the summary/abstract of the data analysis project
 
 -------------------------------------------
 
-## Ask {#section-2}
+## Aim of the study (Ask) {#section-2}
 
 This project aims to understand and identify the usage trends in existing customers of 
-non-Bellabeat fitness devices. The trends identified from this study will be applied to existing Bellabeat customers and theor marketing strategy
+non-Bellabeat fitness devices. The trends identified from this study will be applied to existing Bellabeat customers and their marketing strategy
 
-#### Primary Stakeholders:
+The primary stake holders are:
 
 - Urška Sršen - Co-founder of Bellabeat and Chief Creative Officer 
 - Sando Mur - Mathematician and Co-founder; Also member of the Bellabeat executive team
@@ -47,36 +47,308 @@ non-Bellabeat fitness devices. The trends identified from this study will be app
 
 This case study uses the FitBit Fitness Tracker Data stored in Kaggle at the location [(https://www.kaggle.com/datasets/arashnic/fitbit)](https://www.kaggle.com/datasets/arashnic/fitbit). The dataset is hosted by Mobius [(Kaggle profile)](https://www.kaggle.com/arashnic)
 
-Guiding questions
+**Data Collection**
 
-- Where is your data stored?
-- How is the data organized? Is it in long or wide format?
-- Are there issues with bias or credibility in this data? Does your data ROCCC?
-- How are you addressing licensing, privacy, security, and accessibility?
-- How did you verify the data’s integrity?
-- How does it help you answer your question?
-- Are there any problems with the data?
+The dataset in question resulted from a distributed survey conducted via Amazon Mechanical Turk between March 12, 2016, and May 12, 2016. Over this period, thirty eligible Fitbit users granted consent for the collection of their personal tracker data, including minute-level records for physical activity, heart rate, and sleep monitoring.
+
+**Data Variability**
+
+It is worth noting that variations observed in the dataset are attributable to the utilization of different types of Fitbit trackers and the distinct tracking behaviors and preferences exhibited by individual users.
 
 -------------------------------------------
 
 ## Data Processing {#section-4}
 
-```{r, results='hide'}
-library(ggpubr)
+For this study, we use the following libraries:
+
+```{r, message = FALSE}
 library(tidyverse)
-library(here)
-library(skimr)
+library(plotly)
+library(ggplot2)
 library(janitor)
 library(lubridate)
-library(ggrepel)
 library(conflicted)
 ```
+
+We then read in the datasets containing the daily values using the following code:
+
+```{r, message = FALSE}
+dailyActivity <- read_csv(file= "./inputData/dailyActivity_merged.csv")
+sleepDay <- read_csv(file="./inputData/sleepDay_merged.csv")
+```
+
+We also read in a few hourly datasets:
+```{r, message = FALSE}
+hourlyCalories <- read_csv(file= "./inputData/hourlyCalories_merged.csv")
+hourlyInt <- read_csv(file="./inputData/hourlyIntensities_merged.csv")
+hourlySteps <- read_csv(file="./inputData/hourlySteps_merged.csv")
+```
+
+
+### Exploring the datasets
+
+#### Previewing the data
+
+1. Daily Activity
+```{r}
+glimpse(dailyActivity)
+```
+
+2. Sleep Data
+```{r}
+glimpse(sleepDay)
+```
+
+
+### Converting formats and cleaning the datasets
+
+We see from the previous section that the **ActivityDate** column is for dates in the Daily Activity dataset and **SleepDay** is the column for dates in the Sleep Data set. We can rename both of these columns to a common variable name called **dateTime** and change the type from *chr* to *date*.
+
+```{r}
+dailyActivity <- dailyActivity %>%
+  clean_names() %>%  # Clean column names
+  rename(dateTime = activity_date) %>%
+  mutate(dateTime = as.Date(dateTime, format = "%m/%d/%Y")) %>%
+  distinct() %>%    # Remove duplicate rows
+  drop_na()         # Remove rows with missing values
+
+sleepDay <- sleepDay %>%
+  clean_names() %>%  # Clean column names
+  rename(dateTime = sleep_day) %>%
+  mutate(dateTime = as.POSIXct(dateTime, format = "%m/%d/%Y %I:%M:%S %p")) %>%
+  distinct() %>%    # Remove duplicate rows
+  drop_na()         # Remove rows with missing values
+```
+  
+After this step we have two dataframes that have the following common columns:
+
+```{r, echo='false'}
+intersect(names(dailyActivity), names(sleepDay))
+```
+
+Now, using these two columns we can merge the dataframes to create a single dataframe for all our analysis
+
+```{r}
+mergeData <- merge(dailyActivity, sleepDay, by = c("dateTime", "id"))
+
+glimpse(mergeData)
+```
+
+Finally, we also check the total number of unique participants in our merged dataframe.
+
+```{r}
+unique_id_count <- mergeData %>%
+  distinct(id) %>%
+  n_distinct()
+
+unique_id_count
+```
+
+Thus, through the filtering process we have reduced the number of participants from 30 to 24.
 
 -------------------------------------------
 
 ## Data Analysis {#section-5}
 
-This is the content of Section 5.
+
+### Figuring out correlations
+
+
+```{r}
+# Create a scatter plot with a colormap using ggplot2
+gg <- ggplot(data = mergeData, aes(x = total_steps, y = calories)) +
+  geom_point() +
+  ggtitle("Scatter Plot of Total Steps vs. Calories") +
+  xlab("Total Steps") +
+  ylab("Calories")
+
+# Fit a linear regression model
+model <- lm(calories ~ total_steps, data = mergeData)
+
+# Add regression line and display R-squared (R) and p-value
+gg <- gg +
+  geom_smooth(method = "loess")
+
+# Convert ggplot to plotly
+scatter_plot <- ggplotly(gg)
+scatter_plot
+```
+
+```{r}
+gg <- ggplot(data = mergeData, aes(x = sedentary_minutes, y = total_minutes_asleep)) +
+  geom_point() +
+  ggtitle("Scatter Plot of Sedentary Minutes vs. Time Asleep") +
+  xlab("Sedentary Minutes") +
+  ylab("Sleep Time")
+
+# Fit a linear regression model
+model <- lm(total_minutes_asleep ~ sedentary_minutes, data = mergeData)
+
+# Add regression line and display R-squared (R) and p-value
+gg <- gg +
+  geom_smooth(method = "loess")
+
+# Convert ggplot to plotly
+scatter_plot <- ggplotly(gg)
+scatter_plot
+```
+
+### Segregating the population based on daily steps
+
+```{r}
+# Group by id and calculate the mean of total_steps
+steps_mean_by_id <- mergeData %>%
+  group_by(id) %>%
+  summarize(mean_total_steps = mean(total_steps, na.rm = TRUE))
+
+# Print the result
+print(steps_mean_by_id)
+
+# Create a histogram
+histogram_plot <- plot_ly(steps_mean_by_id, x = ~mean_total_steps, type = "histogram")
+
+# Add labels and title using plotly::layout
+histogram_plot <- histogram_plot %>%
+  plotly::layout(
+    xaxis = list(title = "Mean Total Steps"),
+    yaxis = list(title = "Frequency"),
+    title = "Histogram of Mean Total Steps by ID"
+  )
+
+# Print the histogram
+histogram_plot
+
+```
+
+
+```{r}
+# Calculate quartiles of mean_total_steps
+quartiles <- quantile(steps_mean_by_id$mean_total_steps, probs = c(0, 0.25, 0.5, 0.75, 1))
+
+# Create a new column "category" based on quartiles
+steps_mean_by_id$category <- cut(
+  steps_mean_by_id$mean_total_steps,
+  breaks = quartiles,
+  labels = c("Lowest", "Low", "Moderate", "High"),
+  include.lowest = TRUE
+)
+
+# Print the first few rows to check the result
+head(steps_mean_by_id)
+
+# Count the number of ids in each category
+category_counts <- table(steps_mean_by_id$category)
+
+# Define the criteria for categorization
+steps_mean_by_id <- steps_mean_by_id %>%
+  mutate(
+    activity_level = case_when(
+      mean_total_steps < 5000 ~ "Sedentary Lifestyle",
+      between(mean_total_steps, 5000, 7499) ~ "Low Active",
+      between(mean_total_steps, 7500, 9999) ~ "Somewhat Active",
+      mean_total_steps >= 10000 ~ "Active",
+      TRUE ~ "Highly Active"
+    )
+  )
+
+# Create a table of counts for each activity level
+activity_counts <- steps_mean_by_id %>%
+  count(activity_level)
+
+# Plot the pie chart
+fig <- plot_ly(data = activity_counts, labels = ~activity_level, values = ~n, type = 'pie')
+
+# Customize the pie chart layout (optional)
+fig <- fig %>% plotly::layout(
+  title = "Distribution of Activity Levels",
+  showlegend = TRUE,
+  xaxis = list(showgrid = FALSE, zeroline = FALSE, showticklabels = FALSE),
+  yaxis = list(showgrid = FALSE, zeroline = FALSE, showticklabels = FALSE)
+)
+
+# Show the pie chart
+fig
+```
+
+
+```{r}
+# Merge the activity levels into mergeData based on ID
+mergeData <- mergeData %>%
+  left_join(steps_mean_by_id, by = "id")
+```
+
+
+```{r}
+
+# Define the custom order of x-axis categories
+custom_order <- c("Sedentary Lifestyle", "Low Active", "Somewhat Active", "Active", "Highly Active")
+
+# Create a box plot with individual colors
+box_plot <- plot_ly(
+  data = mergeData,
+  y = ~total_steps,
+  type = "box",
+  color = ~activity_level) %>%
+  plotly::layout(
+    title = "Box Plot of Activity Level vs. Total Steps",
+    xaxis = list(title = "Activity Level", categoryorder = "array", categoryarray = custom_order),
+    yaxis = list(title = "Total Steps")
+  )
+
+# Show the box plot
+box_plot
+
+
+# Create a box plot with individual colors
+box_plot <- plot_ly(
+  data = mergeData,
+  y = ~calories,
+  type = "box",
+  color = ~activity_level) %>%
+  plotly::layout(
+    title = "Box Plot of Activity Level vs. Calories",
+    xaxis = list(title = "Activity Level", categoryorder = "array", categoryarray = custom_order),
+    yaxis = list(title = "Calories")
+  )
+
+# Show the box plot
+box_plot
+
+
+# Create a box plot with a specific color scale
+box_plot <- plot_ly(
+  data = mergeData,
+  y = ~total_minutes_asleep,
+  type = "box",
+  color = ~activity_level
+) %>%
+  plotly::layout(
+    title = "Box Plot of Activity Level vs. Sleep",
+    xaxis = list(title = "Activity Level", categoryorder = "array", categoryarray = custom_order),
+    yaxis = list(title = "Sleep")
+  )
+
+# Show the box plot
+box_plot
+
+# Create a box plot with a specific color scale
+box_plot <- plot_ly(
+  data = mergeData,
+  y = ~sedentary_minutes,
+  type = "box",
+  color = ~activity_level
+) %>%
+  plotly::layout(
+    title = "Box Plot of Activity Level vs. Sedentary Minutes",
+    xaxis = list(title = "Activity Level", categoryorder = "array", categoryarray = custom_order),
+    yaxis = list(title = "Sedentary Minutes")
+  )
+
+# Show the box plot
+box_plot
+
+```
+
 
 -------------------------------------------
 
