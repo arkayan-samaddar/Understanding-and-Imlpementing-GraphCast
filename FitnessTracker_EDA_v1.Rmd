@@ -17,9 +17,8 @@
 - <span class="toc-item">[Data Preparation](#section-3)</span>
 - <span class="toc-item">[Data Processing](#section-4)</span>
 - <span class="toc-item">[Data Analysis](#section-5)</span>
-- <span class="toc-item">[Share](#section-6)</span>
-- <span class="toc-item">[Conclusions](#section-7)</span>
-- <span class="toc-item">[Suggested Actions](#section-8)</span>
+- <span class="toc-item">[Conclusions](#section-6)</span>
+- <span class="toc-item">[Suggested Actions](#section-7)</span>
 
 
 ## Summary of Project {#section-1}
@@ -67,8 +66,30 @@ library(plotly)
 library(ggplot2)
 library(janitor)
 library(lubridate)
+library(gridExtra)
 library(conflicted)
 ```
+
+
+We setup a style for the tables:
+
+<style>
+  table {
+    border-collapse: collapse;
+    width: 100%;
+  }
+
+  th, td {
+    padding: 8px;
+    text-align: left;
+    border-bottom: 1px solid #ddd;
+  }
+
+  th {
+    background-color: #f2f2f2;
+  }
+</style>
+
 
 We then read in the datasets containing the daily values using the following code:
 
@@ -99,6 +120,20 @@ glimpse(dailyActivity)
 glimpse(sleepDay)
 ```
 
+3. Hourly Calories
+```{r}
+glimpse(hourlyCalories)
+```
+
+4. Hourly Activity Intensity
+```{r}
+glimpse(hourlyInt)
+```
+
+5. Hourly Steps
+```{r}
+glimpse(hourlySteps)
+```
 
 ### Converting formats and cleaning the datasets
 
@@ -145,6 +180,31 @@ unique_id_count
 ```
 
 Thus, through the filtering process we have reduced the number of participants from 30 to 24.
+
+We perform a similar merging for the hourly dataframes. We see that all three dataframes have a common date column called *ActivityHour* which can be used to merge them into a single dataframe for all hourly data.
+
+```{r}
+# Merge the dataframes using dplyr because its faster than merge for large data
+mergeHourly <- hourlyInt %>%
+  left_join(hourlyCalories, by = c("ActivityHour", "Id")) %>%
+  left_join(hourlySteps, by = c("ActivityHour", "Id"))
+
+glimpse(mergeHourly)
+```
+
+We begin by cleaning the dataframes, dropping missing values and removing duplicates. 
+
+```{r}
+mergeHourly <- mergeHourly %>%
+  clean_names() %>%  # Clean column names
+  rename(dateTime = activity_hour) %>% # Cleaning names will change the name 
+  mutate(dateTime = as.POSIXct(dateTime, format = "%m/%d/%Y %I:%M:%S %p")) %>%
+  distinct() %>%    # Remove duplicate rows
+  drop_na()         # Remove rows with missing values
+
+glimpse(mergeHourly)
+
+```
 
 -------------------------------------------
 
@@ -193,7 +253,11 @@ scatter_plot <- ggplotly(gg)
 scatter_plot
 ```
 
-### Segregating the population based on daily steps
+### Segregating the population based on an activity score:
+
+
+
+---
 
 ```{r}
 # Group by id and calculate the mean of total_steps
@@ -201,171 +265,642 @@ steps_mean_by_id <- mergeData %>%
   group_by(id) %>%
   summarize(mean_total_steps = mean(total_steps, na.rm = TRUE))
 
-# Print the result
-print(steps_mean_by_id)
+# Group by id and calculate the mean of calories
+calories_mean_by_id <- mergeData %>%
+  group_by(id) %>%
+  summarize(mean_total_calories = mean(calories, na.rm = TRUE))
 
-# Create a histogram
-histogram_plot <- plot_ly(steps_mean_by_id, x = ~mean_total_steps, type = "histogram")
+# Combine the dataframes
+combined_data <- merge(steps_mean_by_id, calories_mean_by_id, by = "id")
 
-# Add labels and title using plotly::layout
-histogram_plot <- histogram_plot %>%
-  plotly::layout(
-    xaxis = list(title = "Mean Total Steps"),
-    yaxis = list(title = "Frequency"),
-    title = "Histogram of Mean Total Steps by ID"
-  )
+# Create a histogram for mean_total_steps (normalized)
+hist_steps <- ggplot(combined_data, aes(x = mean_total_steps)) +
+  geom_histogram(aes(y = ..density..), binwidth = 500, fill = "blue", alpha = 0.5) +
+  geom_density(aes(x = mean_total_steps), color = "black", size = 1) + # Add density line
+  labs(
+    x = "Mean Total Steps",
+    y = "Density",
+    title = "Normalized Histogram of Mean Total Steps"
+  ) +
+  scale_fill_manual(values = c("blue")) +
+  theme_minimal()
 
-# Print the histogram
-histogram_plot
+hist_steps
+
+# Create a histogram for mean_total_calories (normalized)
+hist_calories <- ggplot(combined_data, aes(x = mean_total_calories)) +
+  geom_histogram(aes(y = ..density..), binwidth = 500, fill = "red", alpha = 0.5) +
+  geom_density(aes(x = mean_total_calories), color = "black", size = 1) + # Add density line
+  labs(
+    x = "Mean Total Calories",
+    y = "Density",
+    title = "Normalized Histogram of Mean Total Calories"
+  ) +
+  scale_fill_manual(values = c("red")) +
+  theme_minimal()
+
+hist_calories
 
 ```
 
+**Activity Score Calculation**
+
+In this section, we describe the methodology used to calculate activity scores for a group of participants based on their daily activity data, including total steps and calories expended. The objective of this exercise is to develop a single metric that can represent the overall level of physical activity for each participant, combining information from both total steps and calorie expenditure.
+
+**Data Description**
+
+The data used for this analysis includes daily activity records for a group of participants. The key variables considered in this analysis are as follows:
+
+1. **Total Steps**: The total number of steps taken by each participant on a given day.
+
+2. **Calories**: The total calories expended by each participant on a given day.
+
+3. **ID**: A unique identifier for each participant.
+
+**Methodology**
+
+To calculate the activity score, we first divided the participants into quartiles based on their total steps and calories. This division helps us categorize participants into four groups, with each group representing a different level of activity.
+
+- **Steps Quartiles (Steps_Q1, Steps_Q2, Steps_Q3, Steps_Q4)**: Participants were divided into four quartiles based on their daily total steps. The quartiles help us identify how active each participant is concerning their daily step count.
+
+- **Calories Quartiles (Calories_Q1, Calories_Q2, Calories_Q3, Calories_Q4)**: Similarly, participants were divided into four quartiles based on their daily calorie expenditure. This categorization helps us assess how many calories each participant typically burns daily.
+
+**Combining Quartiles into Activity Score**
+
+After categorizing participants into quartiles for both total steps and calorie expenditure, we combined these quartiles to create an overall activity score. To do this, we assigned numerical values to each quartile:
+
+- **Steps Quartiles (Steps_Q1 to Steps_Q4)**: Assigned values 1 to 4, where 1 represents the lowest activity level (Steps_Q1) and 4 represents the highest activity level (Steps_Q4).
+
+- **Calories Quartiles (Calories_Q1 to Calories_Q4)**: Similarly, assigned values 1 to 4, with 1 indicating the lowest calorie expenditure (Calories_Q1) and 4 indicating the highest calorie expenditure (Calories_Q4).
+
+Next, we combined the values from the steps and calories quartiles for each participant. To provide more weight to calorie expenditure, which may represent intense physical activity (e.g., exercising at the gym), we multiplied the calorie quartile value by a weight factor (in this case, 2) before adding it to the steps quartile value. This ensured that calorie expenditure has a more significant impact on the overall activity score.
+
+Finally, the combined values were used as the activity score for each participant. These values are used to create the following labels for each participant:
+
+| Activity Score | Activity Level   |
+|----------------|-------------------|
+| 2              | Sedentary         |
+| 3              | Low Activity      |
+| 4              | Somewhat Active  |
+| 5              | Active            |
+| 6              | Highly Active     |
+
+
+**Results**
+
+The resulting activity scores provide a single metric that quantifies the overall level of physical activity for each participant. Higher activity scores indicate a more active lifestyle, considering both daily steps and calorie expenditure. This metric can be used to classify participants into different activity levels, such as low activity, moderate activity, high activity, etc., based on their scores.
+
+**Conclusion**
+
+The activity scores calculated in this analysis provide a comprehensive assessment of participants' physical activity levels, combining data on daily steps and calorie expenditure. This single metric simplifies the interpretation of an individual's overall activity and can be a valuable tool in assessing health and lifestyle patterns.
+
+Further analyses and research can be conducted using these activity scores to explore relationships between physical activity and various health outcomes, potentially leading to personalized recommendations for improving individuals' well-being.
+
+
+
 
 ```{r}
-# Calculate quartiles of mean_total_steps
-quartiles <- quantile(steps_mean_by_id$mean_total_steps, probs = c(0, 0.25, 0.5, 0.75, 1))
+# Calculate quartiles for total_steps
+total_steps_quartiles <- quantile(steps_mean_by_id$mean_total_steps, probs = c(0, 0.25, 0.5, 0.75, 1))
 
-# Create a new column "category" based on quartiles
-steps_mean_by_id$category <- cut(
-  steps_mean_by_id$mean_total_steps,
-  breaks = quartiles,
-  labels = c("Lowest", "Low", "Moderate", "High"),
+# Create a new variable combining quartiles for total_steps
+steps_mean_by_id$group_steps <- cut(
+  x = steps_mean_by_id$mean_total_steps,
+  breaks = total_steps_quartiles,
+  labels = paste("Steps", c("Q1", "Q2", "Q3", "Q4"), sep = "_"),
   include.lowest = TRUE
 )
 
-# Print the first few rows to check the result
-head(steps_mean_by_id)
+# Calculate quartiles for calories
+calories_quartiles <- quantile(calories_mean_by_id$mean_total_calories, probs = c(0, 0.25, 0.5, 0.75, 1))
 
-# Count the number of ids in each category
-category_counts <- table(steps_mean_by_id$category)
-
-# Define the criteria for categorization
-steps_mean_by_id <- steps_mean_by_id %>%
-  mutate(
-    activity_level = case_when(
-      mean_total_steps < 5000 ~ "Sedentary Lifestyle",
-      between(mean_total_steps, 5000, 7499) ~ "Low Active",
-      between(mean_total_steps, 7500, 9999) ~ "Somewhat Active",
-      mean_total_steps >= 10000 ~ "Active",
-      TRUE ~ "Highly Active"
-    )
-  )
-
-# Create a table of counts for each activity level
-activity_counts <- steps_mean_by_id %>%
-  count(activity_level)
-
-# Plot the pie chart
-fig <- plot_ly(data = activity_counts, labels = ~activity_level, values = ~n, type = 'pie')
-
-# Customize the pie chart layout (optional)
-fig <- fig %>% plotly::layout(
-  title = "Distribution of Activity Levels",
-  showlegend = TRUE,
-  xaxis = list(showgrid = FALSE, zeroline = FALSE, showticklabels = FALSE),
-  yaxis = list(showgrid = FALSE, zeroline = FALSE, showticklabels = FALSE)
+# Create a new variable combining quartiles for calories
+calories_mean_by_id$group_calories <- cut(
+  x = calories_mean_by_id$mean_total_calories,
+  breaks = calories_quartiles,
+  labels = paste("Calories", c("Q1", "Q2", "Q3", "Q4"), sep = "_"),
+  include.lowest = TRUE
 )
 
-# Show the pie chart
-fig
 ```
 
 
+
 ```{r}
+
+# Define the labels for activity scores and the desired order
+activity_score_labels <- c("Sedentary", "Moderate", "Fairly Active", "Active", "Very Active")
+
 # Merge the activity levels into mergeData based on ID
 mergeData <- mergeData %>%
-  left_join(steps_mean_by_id, by = "id")
+  left_join(steps_mean_by_id, by = "id") %>%
+  left_join(calories_mean_by_id, by = "id")
+
+# Assign numeric values based on quartile categories for steps and calories
+mergeData$steps_numeric <- as.integer(sub("Steps_Q", "", mergeData$group_steps))
+mergeData$calories_numeric <- as.integer(sub("Calories_Q", "", mergeData$group_calories))
+
+# Define the weight for calories quartiles (e.g., Q3 and Q4 have higher weight)
+weight_for_calories <- c(1, 1, 2, 2)  # Assign higher weight to Q3 and Q4 for calories
+
+# Calculate the activity_score by combining quartiles for steps and calories with weight
+mergeData$activity_score <- (mergeData$steps_numeric + weight_for_calories[mergeData$calories_numeric])
+
+# Calculate the mean activity score per ID
+mean_activity_score_by_id <- mergeData %>%
+  group_by(id) %>%
+  summarize(mean_activity_score = mean(activity_score, na.rm = TRUE))
+
+# Create a histogram using ggplot2
+histogram <- ggplot(mean_activity_score_by_id, aes(x = mean_activity_score)) +
+  geom_histogram(fill = "green", color = "black", bins = 6, alpha = 0.5) +  # Fill color and black borders
+  labs(
+    title = "Histogram of Mean Activity Scores per ID",
+    x = "Mean Activity Score",
+    y = "Frequency"
+  ) +
+  theme_minimal() +
+  scale_x_continuous(
+    breaks = 2:6,  # Specify the breaks for activity scores
+    labels = c("Sedentary", "Low Activity", "Fairly Active", "Active", "Very Active")  # Labels for each score
+  )
+
+# Show the histogram
+print(histogram)
+
+
+
+
+# Calculate the count of unique IDs for each activity score category
+activity_score_counts <- mergeData %>%
+  group_by(activity_score) %>%
+  summarize(unique_ids = n_distinct(id))
+
+
+# Define 6 unique pastel shade colors
+pastel_colors <- c("#FFD700", "#98FB98", "#FFA07A", "#87CEFA", "#FF69B4")
+
+# Calculate the count of unique IDs for each activity score category
+activity_score_counts <- mergeData %>%
+  group_by(activity_score) %>%
+  summarize(unique_ids = n_distinct(id))
+
+
+
+# Create the pie chart with custom colors and labels
+
+pie_chart <- plot_ly(
+  labels = activity_score_labels,
+  values = activity_score_counts$unique_ids,
+  type = "pie",
+  textinfo = "percent+label",
+  marker = list(colors = pastel_colors)  # Assign custom colors
+) %>%
+  plotly::layout(
+    title = "Distribution of Unique IDs by Activity Score",
+    showlegend = TRUE
+  )
+
+# Show the pie chart
+pie_chart
+
+
 ```
+
+
+### Trends based on activity score
+
+
+Physical activity plays a crucial role in our daily lives, and understanding its effects on our health is of paramount importance. In this study, participants were categorized into different activity levels based on their activity scores. This division allowed us to explore how varying activity levels influence various health-related aspects.
 
 
 ```{r}
 
-# Define the custom order of x-axis categories
-custom_order <- c("Sedentary Lifestyle", "Low Active", "Somewhat Active", "Active", "Highly Active")
+mergeData <- right_join(mergeData,mean_activity_score_by_id, by = "id")
 
-# Create a box plot with individual colors
-box_plot <- plot_ly(
-  data = mergeData,
-  y = ~total_steps,
-  type = "box",
-  color = ~activity_level) %>%
-  plotly::layout(
-    title = "Box Plot of Activity Level vs. Total Steps",
-    xaxis = list(title = "Activity Level", categoryorder = "array", categoryarray = custom_order),
-    yaxis = list(title = "Total Steps")
-  )
+# Create a function to map scores to labels
+score_to_label <- function(score) {
+  if (score == 2) {
+    return("Sedentary")
+  } else if (score == 3) {
+    return("Moderate")
+  } else if (score == 4) {
+    return("Fairly Active")
+  } else if (score == 5) {
+    return("Active")
+  } else if (score == 6) {
+    return("Very Active")
+  } else {
+    return("Unknown")  # Add a default label for unknown scores
+  }
+}
 
-# Show the box plot
-box_plot
-
-
-# Create a box plot with individual colors
-box_plot <- plot_ly(
-  data = mergeData,
-  y = ~calories,
-  type = "box",
-  color = ~activity_level) %>%
-  plotly::layout(
-    title = "Box Plot of Activity Level vs. Calories",
-    xaxis = list(title = "Activity Level", categoryorder = "array", categoryarray = custom_order),
-    yaxis = list(title = "Calories")
-  )
-
-# Show the box plot
-box_plot
-
-
-# Create a box plot with a specific color scale
-box_plot <- plot_ly(
-  data = mergeData,
-  y = ~total_minutes_asleep,
-  type = "box",
-  color = ~activity_level
-) %>%
-  plotly::layout(
-    title = "Box Plot of Activity Level vs. Sleep",
-    xaxis = list(title = "Activity Level", categoryorder = "array", categoryarray = custom_order),
-    yaxis = list(title = "Sleep")
-  )
-
-# Show the box plot
-box_plot
-
-# Create a box plot with a specific color scale
-box_plot <- plot_ly(
-  data = mergeData,
-  y = ~sedentary_minutes,
-  type = "box",
-  color = ~activity_level
-) %>%
-  plotly::layout(
-    title = "Box Plot of Activity Level vs. Sedentary Minutes",
-    xaxis = list(title = "Activity Level", categoryorder = "array", categoryarray = custom_order),
-    yaxis = list(title = "Sedentary Minutes")
-  )
-
-# Show the box plot
-box_plot
+# Use the function to add the Label column to main dataframe
+mergeData$Label <- sapply(mergeData$activity_score, score_to_label)
 
 ```
 
 
+#### Relatioship between Step count and Calories burned
+
+
+One of the primary aspects we examined was the relationship between the number of steps taken and the calories burned. This relationship serves as a fundamental indicator of how our daily physical activities contribute to our overall energy expenditure. What we discovered was intriguing: for individuals classified as sedentary and very active, there was a notably high correlation between their step counts and the calories they burned. This suggests that even simple lifestyle changes, such as increasing daily steps, can have a significant impact on overall energy balance. However, the correlation was lower for those in the intermediate activity groups, highlighting the complexity of this relationship.
+
+```{r, fig.height=16,fig.width=9}
+# Create the scatter plot with separate loess regression lines for each label
+scatter_plot <- ggplot(mergeData, aes(x = total_steps, y = calories, color = Label)) +
+  geom_point(size = 4) +  # Adjust the size of scatter markers (points)
+  labs(
+    title = "Scatter Plot of Total Steps vs Calories (Colored by Label)",
+    x = "Total Steps",
+    y = "Calories"
+  ) +
+  scale_color_manual(
+    values = c(
+      "Sedentary" = pastel_colors[1],
+      "Moderate" = pastel_colors[2],
+      "Fairly Active" = pastel_colors[3],
+      "Active" = pastel_colors[4],
+      "Very Active" = pastel_colors[5]
+    ),
+    breaks = c("Sedentary", "Moderate", "Fairly Active", "Active", "Very Active"),
+    labels = c("Sedentary", "Moderate", "Fairly Active", "Active", "Very Active")
+  ) +  # Set custom pastel colors and reorder legend labels
+  geom_smooth(method = "loess", formula = y ~ x, color = "darkgray", se = FALSE) +  # Add loess regression lines
+  facet_wrap(~Label, nrow = 5, scales = "free") +  # Separate plots by Label in one row
+  theme_minimal() +  # Minimal theme
+  theme(
+    axis.title = element_text(size = 12),
+    axis.text = element_text(size = 10),
+    legend.text = element_text(size = 12),  # Adjust legend text size
+    legend.key.size = unit(1.5, "lines")  # Adjust legend key (color box) size
+  ) +
+  coord_cartesian(clip = 'off')
+
+# Show the scatter plot
+print(scatter_plot)
+```
+
+
+```{r}
+# Calculate R values and create a table
+r_values <- mergeData %>%
+  group_by(Label) %>%
+  summarize(R_value = cor(total_steps, calories, method = "pearson"))
+
+print(r_values)
+
+```
+
+<table border="1">
+  <thead>
+    <tr>
+      <th>Label</th>
+      <th>R_value</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td>Active</td>
+      <td>0.1400761</td>
+    </tr>
+    <tr>
+      <td>Fairly Active</td>
+      <td>0.4052741	</td>
+    </tr>
+    <tr>
+      <td>Moderate</td>
+      <td>0.3681930	</td>
+    </tr>
+    <tr>
+      <td>Sedentary</td>
+      <td>0.7882628	</td>
+    </tr>
+    <tr>
+      <td>Very Active</td>
+      <td>0.7446293	</td>
+    </tr>
+  </tbody>
+</table>
+
+#### Relatioship between Sedentary Minutes and Time Asleep
+
+Beyond the step-count-calories relationship, we delved into another important aspect of health: sleep. We compared the amount of time individuals spent asleep to the time they spent in a sedentary state. The results revealed a noteworthy negative correlation. In practical terms, this implies that individuals who accumulate more sedentary minutes in their daily routines tend to experience shorter sleep durations. This observation holds particularly true for sedentary individuals. These findings underscore the importance of reducing sedentary behavior and its potential impact on sleep quality and duration, shedding light on potential lifestyle modifications for better overall health and well-being.
+
+
+```{r, fig.height=16,fig.width=9}
+# Create the scatter plot with separate loess regression lines for each label
+scatter_plot <- ggplot(mergeData, aes(x = sedentary_minutes, y = total_minutes_asleep, color = Label)) +
+  geom_point(size = 4) +  # Adjust the size of scatter markers (points)
+  labs(
+    title = "Scatter Plot of Sedentary Minutes vs Time Asleep (Colored by Label)",
+    x = "Sedentary Minutes",
+    y = "Time Asleep"
+  ) +
+  scale_color_manual(
+    values = c(
+      "Sedentary" = pastel_colors[1],
+      "Moderate" = pastel_colors[2],
+      "Fairly Active" = pastel_colors[3],
+      "Active" = pastel_colors[4],
+      "Very Active" = pastel_colors[5]
+    ),
+    breaks = c("Sedentary", "Moderate", "Fairly Active", "Active", "Very Active"),
+    labels = c("Sedentary", "Moderate", "Fairly Active", "Active", "Very Active")
+  ) +  # Set custom pastel colors and reorder legend labels
+  geom_smooth(method = "loess", formula = y ~ x, color = "darkgray", se = FALSE) +  # Add loess regression lines
+  facet_wrap(~Label, nrow = 5, scales = "free") +  # Separate plots by Label in one row
+  theme_minimal() +  # Minimal theme
+  theme(
+    axis.title = element_text(size = 12),
+    axis.text = element_text(size = 10),
+    legend.text = element_text(size = 12),  # Adjust legend text size
+    legend.key.size = unit(1.5, "lines")  # Adjust legend key (color box) size
+  ) +
+  coord_cartesian(clip = 'off')
+
+# Show the scatter plot
+print(scatter_plot)
+```
+
+
+
+```{r}
+# Calculate R values and create a table
+r_values <- mergeData %>%
+  group_by(Label) %>%
+  summarize(R_value = cor(sedentary_minutes, total_minutes_asleep, method = "pearson"))
+
+```
+
+
+
+<table border="1">
+  <thead>
+    <tr>
+      <th>Label</th>
+      <th>R_value</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td>Active</td>
+      <td>-0.5265503</td>
+    </tr>
+    <tr>
+      <td>Fairly Active</td>
+      <td>-0.6269359</td>
+    </tr>
+    <tr>
+      <td>Moderate</td>
+      <td>-0.6346368</td>
+    </tr>
+    <tr>
+      <td>Sedentary</td>
+      <td>-0.9024772</td>
+    </tr>
+    <tr>
+      <td>Very Active</td>
+      <td>-0.6074418</td>
+    </tr>
+  </tbody>
+</table>
+
+
+### Hourly trends
+
+
+We now merge the daily dataframe **mergeData** to **mergeHourly** using *id* and *dateTime* to make a master dataframe for the following analysis. 
+
+```{r}
+fullMerge <- left_join(mergeData,mergeHourly, by = c("id"))
+glimpse(fullMerge)
+```
+
+
+#### When are people most active?
+
+**Analyzing Hourly Activity Intensity Patterns**
+
+In the subsequent phase of our investigation, we delved into the hourly distribution of activity intensity among all participants. This exploration aimed to uncover the peaks and valleys in activity levels throughout the day, shedding light on how different segments of the population engage in physical activities during various hours.
+
+**Overall Trends**
+
+At a macro level, our observations revealed a remarkable pattern in the distribution of activity intensity. Specifically, the most intense physical activity occurred between 5 PM and 6 PM on weekdays (Monday to Friday). This finding suggests a collective trend of heightened activity levels during the late afternoon and early evening hours, possibly influenced by workday routines and schedules. It underscores the importance of considering daily routines and commitments when planning physical activities for optimal health.
+
+**Distinct Population Patterns**
+
+However, as we delved deeper into the data, intriguing differences emerged when we examined specific population segments. Sedentary participants exhibited a distinct pattern, characterized by low activity intensity levels between 1 PM and 8 PM. This observation aligns with the sedentary lifestyle and reinforces the need for interventions to break up prolonged sitting periods during these hours.
+
+In contrast, participants classified as moderate to active displayed a contrasting trend. Their activity intensity levels were notably higher between 6 AM and 9 PM, indicating a broader window of physical engagement throughout the day. This observation suggests that individuals in these categories are incorporating various forms of activity into their daily routines.
+
+The most intriguing revelation was made when analyzing the very active population. Their data unveiled an exceptionally high intensity of activity between 5 PM and 6 PM, implying a concentrated burst of physical effort during this specific hour. This insight might signify organized fitness training sessions or gym workouts. Such dedicated, focused activity during this timeframe highlights the unique exercise patterns of this group.
+
+In summary, our exploration of hourly activity intensity distributions showcased the dynamic nature of physical engagement across different population segments. While there's a common peak during late weekday afternoons, distinct patterns emerge for sedentary, moderate, active, and very active individuals. These findings underscore the need for tailored approaches to promote physical activity and optimize health outcomes for each population group.
+
+```{r, fig.width=18, fig.height=9}
+# Calculate day of the week (1 = Sunday, 7 = Saturday)
+fullMerge$day_of_week <- weekdays(fullMerge$dateTime.y)
+fullMerge$day_of_week <- factor(fullMerge$day_of_week, levels = c("Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"))
+
+# Extract hour from dateTime.y
+fullMerge$hour_of_day <- format(fullMerge$dateTime.y, format = "%H:00 \n %p")
+
+# Calculate the average total_intensity per hour, day of the week, and Label
+average_intensity_data <- fullMerge %>%
+  group_by(day_of_week, hour_of_day, Label) %>%
+  summarise(average_total_intensity = mean(total_intensity))
+
+# Create the heatmap-like plot using geom_tile
+heatmap_plot <- ggplot(average_intensity_data, aes(x = hour_of_day, y = day_of_week, fill = average_total_intensity)) +
+  geom_tile() +
+  labs(
+    title = "Average Total Intensity Per Hour and Day of the Week",
+    x = "Hour of Day",
+    y = "Day of Week",
+    fill = "Intensity"  # Set legend title to 'Intensity'
+  ) +
+  theme_minimal() +
+  scale_fill_gradient(low = "darkorchid4", high = "orange", labels = c("Min", "Max"), breaks = c(min(average_intensity_data$average_total_intensity), max(average_intensity_data$average_total_intensity))) +  # Set custom legend labels and breaks
+  theme(
+    axis.text.x = element_text(size = 14),  # Increase x-axis label font size
+    axis.text.y = element_text(size = 14),  # Increase y-axis label font size
+    axis.title.x = element_text(size = 16),  # Increase x-axis title font size
+    axis.title.y = element_text(size = 16),  # Increase y-axis title font size
+    legend.key.size = unit(2, "lines"),  # Increase the size of the legend keys
+    legend.text = element_text(size = 14),  # Increase legend text size
+    legend.title = element_text(size = 16),  # Increase legend title font size
+    plot.title = element_text(size = 18)  # Increase title font size
+  )
+
+print(heatmap_plot)
+
+
+```
+
+
+```{r,fig.width=18, fig.height=9}
+# Use subset to filter the data for "Sedentary" label
+subset_data <- subset(average_intensity_data, Label == "Sedentary")
+
+# Create the heatmap-like plot using geom_tile for "Sedentary" label
+heatmap_plot_sedentary <- ggplot(subset_data, aes(x = hour_of_day, y = day_of_week, fill = average_total_intensity)) +
+  geom_tile() +
+  labs(
+    title = "Average Total Intensity Per Hour and Day of the Week (Sedentary)",
+    x = "Hour of Day",
+    y = "Day of Week",
+    fill = "Intensity"  # Set legend title to 'Intensity'
+  ) +
+  theme_minimal() +
+  scale_fill_gradient(low = "deepskyblue4", high = "coral", labels = c("Min", "Max"), breaks = c(min(subset_data$average_total_intensity), max(subset_data$average_total_intensity))) +  # Set custom legend labels and breaks
+  theme(
+    axis.text.x = element_text(size = 14),  # Increase x-axis label font size
+    axis.text.y = element_text(size = 14),  # Increase y-axis label font size
+    axis.title.x = element_text(size = 16),  # Increase x-axis title font size
+    axis.title.y = element_text(size = 16),  # Increase y-axis title font size
+    legend.key.size = unit(2, "lines"),  # Increase the size of the legend keys
+    legend.text = element_text(size = 14),  # Increase legend text size
+    legend.title = element_text(size = 16),  # Increase legend title font size
+    plot.title = element_text(size = 18)  # Increase title font size
+  )
+
+print(heatmap_plot_sedentary)
+
+# Use subset to filter the data for "Moderate" label
+subset_data_moderate <- subset(average_intensity_data, Label == "Moderate")
+
+# Create the heatmap-like plot using geom_tile for "Moderate" label
+heatmap_plot_moderate <- ggplot(subset_data_moderate, aes(x = hour_of_day, y = day_of_week, fill = average_total_intensity)) +
+  geom_tile() +
+  labs(
+    title = "Average Total Intensity Per Hour and Day of the Week (Moderate)",
+    x = "Hour of Day",
+    y = "Day of Week",
+    fill = "Intensity"  # Set legend title to 'Intensity'
+  ) +
+  theme_minimal() +
+  scale_fill_gradient(low = "deepskyblue4", high = "coral", labels = c("Min", "Max"), breaks = c(min(subset_data_moderate$average_total_intensity), max(subset_data_moderate$average_total_intensity))) +  # Set custom legend labels and breaks
+  theme(
+    axis.text.x = element_text(size = 14),  # Increase x-axis label font size
+    axis.text.y = element_text(size = 14),  # Increase y-axis label font size
+    axis.title.x = element_text(size = 16),  # Increase x-axis title font size
+    axis.title.y = element_text(size = 16),  # Increase y-axis title font size
+    legend.key.size = unit(2, "lines"),  # Increase the size of the legend keys
+    legend.text = element_text(size = 14),  # Increase legend text size
+    legend.title = element_text(size = 16),  # Increase legend title font size
+    plot.title = element_text(size = 18)  # Increase title font size
+  )
+
+print(heatmap_plot_moderate)
+
+# Use subset to filter the data for "Fairly Active" label
+subset_data_fairly_active <- subset(average_intensity_data, Label == "Fairly Active")
+
+# Create the heatmap-like plot using geom_tile for "Fairly Active" label
+heatmap_plot_fairly_active <- ggplot(subset_data_fairly_active, aes(x = hour_of_day, y = day_of_week, fill = average_total_intensity)) +
+  geom_tile() +
+  labs(
+    title = "Average Total Intensity Per Hour and Day of the Week (Fairly Active)",
+    x = "Hour of Day",
+    y = "Day of Week",
+    fill = "Intensity"  # Set legend title to 'Intensity'
+  ) +
+  theme_minimal() +
+  scale_fill_gradient(low = "deepskyblue4", high = "coral", labels = c("Min", "Max"), breaks = c(min(subset_data_fairly_active$average_total_intensity), max(subset_data_fairly_active$average_total_intensity))) +  # Set custom legend labels and breaks
+  theme(
+    axis.text.x = element_text(size = 14),  # Increase x-axis label font size
+    axis.text.y = element_text(size = 14),  # Increase y-axis label font size
+    axis.title.x = element_text(size = 16),  # Increase x-axis title font size
+    axis.title.y = element_text(size = 16),  # Increase y-axis title font size
+    legend.key.size = unit(2, "lines"),  # Increase the size of the legend keys
+    legend.text = element_text(size = 14),  # Increase legend text size
+    legend.title = element_text(size = 16),  # Increase legend title font size
+    plot.title = element_text(size = 18)  # Increase title font size
+  )
+
+print(heatmap_plot_fairly_active)
+
+# Use subset to filter the data for "Active" label
+subset_data_active <- subset(average_intensity_data, Label == "Active")
+
+# Create the heatmap-like plot using geom_tile for "Active" label
+heatmap_plot_active <- ggplot(subset_data_active, aes(x = hour_of_day, y = day_of_week, fill = average_total_intensity)) +
+  geom_tile() +
+  labs(
+    title = "Average Total Intensity Per Hour and Day of the Week (Active)",
+    x = "Hour of Day",
+    y = "Day of Week",
+    fill = "Intensity"  # Set legend title to 'Intensity'
+  ) +
+  theme_minimal() +
+  scale_fill_gradient(low = "deepskyblue4", high = "coral", labels = c("Min", "Max"), breaks = c(min(subset_data_active$average_total_intensity), max(subset_data_active$average_total_intensity))) +  # Set custom legend labels and breaks
+  theme(
+    axis.text.x = element_text(size = 14),  # Increase x-axis label font size
+    axis.text.y = element_text(size = 14),  # Increase y-axis label font size
+    axis.title.x = element_text(size = 16),  # Increase x-axis title font size
+    axis.title.y = element_text(size = 16),  # Increase y-axis title font size
+    legend.key.size = unit(2, "lines"),  # Increase the size of the legend keys
+    legend.text = element_text(size = 14),  # Increase legend text size
+    legend.title = element_text(size = 16),  # Increase legend title font size
+    plot.title = element_text(size = 18)  # Increase title font size
+  )
+
+print(heatmap_plot_active)
+
+# Use subset to filter the data for "Very Active" label
+subset_data_very_active <- subset(average_intensity_data, Label == "Very Active")
+
+# Create the heatmap-like plot using geom_tile for "Very Active" label
+heatmap_plot_very_active <- ggplot(subset_data_very_active, aes(x = hour_of_day, y = day_of_week, fill = average_total_intensity)) +
+  geom_tile() +
+  labs(
+    title = "Average Total Intensity Per Hour and Day of the Week (Very Active)",
+    x = "Hour of Day",
+    y = "Day of Week",
+    fill = "Intensity"  # Set legend title to 'Intensity'
+  ) +
+  theme_minimal() +
+  scale_fill_gradient(low = "deepskyblue4", high = "coral", labels = c("Min", "Max"), breaks = c(min(subset_data_very_active$average_total_intensity), max(subset_data_very_active$average_total_intensity))) +  # Set custom legend labels and breaks
+  theme(
+    axis.text.x = element_text(size = 14),  # Increase x-axis label font size
+    axis.text.y = element_text(size = 14),  # Increase y-axis label font size
+    axis.title.x = element_text(size = 16),  # Increase x-axis title font size
+    axis.title.y = element_text(size = 16),  # Increase y-axis title font size
+    legend.key.size = unit(2, "lines"),  # Increase the size of the legend keys
+    legend.text = element_text(size = 14),  # Increase legend text size
+    legend.title = element_text(size = 16),  # Increase legend title font size
+    plot.title = element_text(size = 18)  # Increase title font size
+  )
+
+print(heatmap_plot_very_active)
+
+
+```
+
 -------------------------------------------
 
-## Share {#section-6}
+## Conclusions {#section-6}
 
-This is the content of Section 6.
+The analysis of physical activity data among various participant groups has revealed essential insights into the intricate relationship between lifestyle, activity intensity, and health. In the first part of the study, participants were classified based on their activity scores, and the correlation between step counts and calories burned was examined. Notably, sedentary and very active individuals exhibited a strong positive correlation, whereas this correlation was less pronounced in the intermediate groups. Furthermore, the investigation into the relationship between sedentary time and sleep duration revealed a negative correlation, indicating that prolonged sedentary behavior is associated with reduced sleep, particularly among sedentary individuals. These findings emphasize the importance of promoting active lifestyles and breaking up extended periods of sitting.
+
+Moving forward to the exploration of hourly activity intensity patterns, compelling insights into how different populations distribute their physical activities throughout the day were uncovered. While the general trend highlighted heightened activity levels during late weekday afternoons, individual segments displayed unique patterns. Sedentary participants exhibited low activity intensity during the afternoon, underscoring the need for strategies to combat prolonged sitting. In contrast, moderate to active individuals engaged in physical activities throughout the day, emphasizing the importance of regular movement in one's daily routine. The most active participants, on the other hand, demonstrated intense bursts of activity during the early evening, possibly indicative of focused fitness sessions.
+
+In summary, this study underscores the significance of tailored approaches to physical activity promotion and health optimization. Recognizing the diverse activity patterns and lifestyles among different populations is crucial for developing effective interventions and strategies. By fostering active lifestyles and addressing sedentary behavior, progress can be made towards improved health outcomes and overall well-being for all individuals, irrespective of their activity levels or daily routines.
+
 
 -------------------------------------------
 
-## Conclusions {#section-7}
+## Suggested Actions {#section-7}
 
-This is the content of Section 7.
+Based on these insights, we can formulate targeted suggestions to enhance Bellabeat's fitness tracker offerings:
 
--------------------------------------------
+    Tailored Fitness Trackers: Recognizing the diversity in activity levels among populations, Bellabeat should consider offering distinct fitness trackers designed to meet the specific needs of different user groups. By customizing features and functionalities, the company can better cater to the unique preferences and lifestyles of sedentary, moderately active, and highly active individuals.
 
-## Suggested Actions {#section-8}
+    Activity Goal Customization: For individuals with lower activity levels or those seeking to improve their sleep quality, Bellabeat should emphasize step count goals and hourly movement reminders. These features can encourage users to incorporate more movement into their daily routines, potentially leading to better rest and sleep patterns.
 
-This is the content of Section 8.
+    Enhanced Workout Support: For highly active individuals who engage in intense physical activities, Bellabeat's fitness trackers could provide specialized features such as workout reminders and hourly activity targets. This would assist users in optimizing their daily activity intensity, ensuring that they make the most of their fitness routines.
+
+By implementing these suggestions, Bellabeat can better address the unique activity and health-related requirements of its diverse user base, ultimately enhancing the overall user experience and promoting better health outcomes.
 
 -------------------------------------------
